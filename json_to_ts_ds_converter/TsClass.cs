@@ -1,4 +1,7 @@
+using System.Diagnostics;
+using System.Linq;
 using System.Reflection.Metadata.Ecma335;
+using System.Security.Cryptography;
 using System.Text.Json.Nodes;
 
 namespace CsClassToTsConverter;
@@ -43,7 +46,7 @@ public class TsClass
 
 
     // appends Children list
-    public void AppendChildren(TsClass child) => Children.Add(child);
+    public void AppendChildren(TsClass child) => Children!.Add(child);
 
 
     public TsClass? GetChild() => Child;
@@ -61,5 +64,12 @@ public class TsClass
     public string GetDType() => DataType;
 
     public string GetValue() => Value;
-    
-}   
+
+
+    // returns true if Children already contains child.
+    public bool IsChildPresent(TsClass obj)
+    {
+        if (Children != null && Children.Count > 0) return Children!.Contains(obj);
+        else return false;
+    }
+}
