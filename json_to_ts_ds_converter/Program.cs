@@ -11,6 +11,7 @@ InputLoop();
 
 void InputLoop()
 {
+    JsonConverter? lol;
     do
     {
         Console.Clear();
@@ -19,7 +20,12 @@ void InputLoop()
         if (input == null) Console.WriteLine("Wrong input.");
         else
         {
-            JsonConverter lol = new(input.Trim());
+            input = input.Trim();
+            lol = new(input);
+            break;
         }
     } while (true);
+    Console.WriteLine("Success");
+    lol.TraverseObjects();
+    Console.WriteLine(lol);
 }

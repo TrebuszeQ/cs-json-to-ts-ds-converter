@@ -9,6 +9,8 @@ using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using System.Runtime.InteropServices.JavaScript;
 using System.Diagnostics;
+using System.Reflection.Metadata.Ecma335;
+using System.Text;
 
 namespace CsClassToTsConverter;
 
@@ -18,9 +20,8 @@ public class JsonConverter
     private string Path { get; set; }
     private bool? FileExists { get; set; }
     private bool? IsJson { get; set; }
-    private Dictionary<string, string>? FileCache { get; set; }
+    private Dictionary<string, string>? FileCache { get; set; } = new Dictionary<string, string>();
     private string Content { get; set; }
-    private int ObjectsCount { get; set; }
     private int TreeIndex { get; set; } = 0;
     private TsClass? CurrentObject { get; set; } = null;
     private TsClass? PreviousObject { get; set; } = null;
@@ -40,9 +41,7 @@ public class JsonConverter
         {
             throw e;
         }
-        if (FileCache == null) FileCache = InitCache();
-        AccessCacheValue();
-        ObjectsCount = CountObjects();
+        AccessCacheValue(path);
         CurrentObject = new TsClass("root", TsType.Object, Content![1..^1], null);
     }
 
@@ -56,28 +55,20 @@ public class JsonConverter
     }
 
 
-    // reads file to string asynchronously and returns it or throws exception
-    private static async Task<string> TryReadFile(string path) => await File.ReadAllTextAsync(path) ?? throw new Exception("File could not been read.");
-
-
-    // returns cache file or if it's different it reads file and saves string to cache. 
-    private Dictionary<string, string> InitCache() => new Dictionary<string, string> { { Path!, Content } };
-
-
     // populates Content with cache value or reads file and saves string to cache then returns string
-    private async void AccessCacheValue()
+    // populates Content with cache value or reads file and saves string to cache then returns string
+    private bool AccessCacheValue(string path)
     {
         bool truth = FileCache!.ContainsKey(key: Path);
         if (truth) Content = FileCache[key: Path];
-        else if(!truth)
+        else if (!truth)
         {
-            string content = await TryReadFile(Path);
-            Debug.WriteLine(content.Length);
-            Console.WriteLine(content);
-            content = content.Trim();
+            string content = File.ReadAllText(path, Encoding.UTF8) ?? throw new NullReferenceException("File is empty, or it coudln't been read. Content is null.");
+            content = content.Replace(" ", "").Replace("\n", "").Replace("\r", "").Replace("\t", "").Replace("\\", "");
             FileCache.Add(key: Path, value: content);
             Content = content;
         }
+        return true;
     }
 
 
@@ -95,9 +86,10 @@ public class JsonConverter
 
     // traverses through objects value, if successfull it returns true, if not it throws exception.
     // when it ReturnObject() returns Object or Array it calls to switch Objects and sets relation.
-    private bool TraverseObjects()
+    public bool TraverseObjects()
     {
-        for (int i = TreeIndex; i < ObjectsCount; i++)
+        int objectsCount = CountObjects();
+        for (int i = TreeIndex; i < objectsCount; i++)
         {
             string value = CurrentObject!.GetValue();
             Content = value;
@@ -138,8 +130,10 @@ public class JsonConverter
         // 1
         int opening = Content.IndexOf("\"");
         int closing = Content.IndexOf(":");
-        string fieldName = Content.Substring(opening, closing - opening);
-        string content = Content.Substring(closing + 1, Content.Length - closing - 1);
+        int trimEnd = closing - opening;
+        string fieldName = Content.Substring(opening, trimEnd);
+        trimEnd = Content.Length - closing - 1;
+        string content = Content.Substring(closing + 1, trimEnd);
         Content = content;
 
         // 2
@@ -151,23 +145,24 @@ public class JsonConverter
         else value = Content[..opening];
         
 
-        string? dataType = TsType.Undefined;
+        string dataType = TsType.Undefined;
         int i;
         // 3
         opening = Content.IndexOf(":");
-        for (i = 0; i < value.Length; i++)
+        for (i = 0; i < value.Length && dataType == TsType.Undefined; i++)
         {
+            
             char chara = value[i];
             switch (chara)
             {
-                case '{':
-                    dataType = TsType.Object;
-                    closing = Content.IndexOf("},{");
-                    break;
-        
                 case '[':
                     dataType = TsType.Array;
-                    closing = Content.IndexOf("}]");
+                    closing = Content.IndexOf("}],");
+                    break;
+
+                case '{':
+                    dataType = TsType.Object;
+                    closing = Content.IndexOf("}},");
                     break;
 
                 case '"':
@@ -191,8 +186,9 @@ public class JsonConverter
             }
         }
 
-        value = Content.Substring(i + 1, closing - i);
-        return  new(fieldName.Trim('"'), dataType, value, null);
+        if (closing == -1) throw new Exception("Closing has not been found");
+        value = Content.Substring(i + 1, closing);
+        return  new(fieldName.Replace("\"", ""), dataType, value, null);
     }
 
 
