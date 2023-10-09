@@ -37,7 +37,7 @@ public class TsClass
     {
         if (child == null) Child = child;
         else if (child != null && Children == null) InitChildren(child);
-        else if (child != null && Children == null) AppendChildren(child);
+        else if (child != null && Children != null) AppendChildren(child);
     }
 
 

@@ -11,20 +11,22 @@ using System.Runtime.InteropServices.JavaScript;
 using System.Diagnostics;
 using System.Reflection.Metadata.Ecma335;
 using System.Text;
+using System.Security.AccessControl;
 
 namespace CsClassToTsConverter;
 
 public class JsonConverter
 {
-    private string? FileName { get; set; }
+    private string? FileName;
     private string Path { get; set; }
-    private bool? FileExists { get; set; }
-    private bool? IsJson { get; set; }
-    private Dictionary<string, string>? FileCache { get; set; } = new Dictionary<string, string>();
-    private string Content { get; set; }
-    private int TreeIndex { get; set; } = 0;
-    private TsClass? CurrentObject { get; set; } = null;
-    private TsClass? PreviousObject { get; set; } = null;
+    private bool? FileExists;
+    private bool? IsJson;
+    private Dictionary<string, string>? FileCache = new Dictionary<string, string>();
+    private string Content;
+    private int TreeIndex = 0;
+    private TsClass? CurrentObject = null;
+    private TsClass? Root = null;
+    private TsClass? PreviousObject = null;
 
     public JsonConverter(string path)
     {
@@ -43,6 +45,7 @@ public class JsonConverter
         }
         AccessCacheValue(path);
         CurrentObject = new TsClass("root", TsType.Object, Content![1..^1], null);
+        Root = CurrentObject;
     }
 
 
@@ -77,7 +80,7 @@ public class JsonConverter
         int counter = 0;
         foreach (char chara in Content)
         {
-            if (chara == '{') counter++;
+            if (chara == '{' || chara == '[') counter++;
         }
 
         return counter;
@@ -91,9 +94,8 @@ public class JsonConverter
         int objectsCount = CountObjects();
         for (int i = TreeIndex; i < objectsCount; i++)
         {
-            string value = CurrentObject!.GetValue();
-            Content = value;
             TraverseValue();
+            TreeIndex = i;
         }
         return true;
     }
@@ -107,15 +109,15 @@ public class JsonConverter
             string value = CurrentObject.GetValue();
             for (int c = 0; c < value.Length; c++)
             {
-                TsClass obj = SeparateValueObjects();
+                TsClass obj = SeparateObjectValues(value);
                 if (CurrentObject.IsChildPresent(obj) == false)
                 {
+                    CurrentObject!.SetChild(obj);
                     if (obj.GetDType() == TsType.Object || obj.GetDType() == TsType.Array)
                     {
                         SwitchObjects(obj);
                         TraverseValue();
                     }
-                    else CurrentObject!.SetChild(obj);
                 }
             }
             return true;
@@ -125,70 +127,79 @@ public class JsonConverter
 
 
     // separates objects from value of the current object 
-    private TsClass SeparateValueObjects()
+    private TsClass SeparateObjectValues(string oldValue)
     {
         // 1
-        int opening = Content.IndexOf("\"");
-        int closing = Content.IndexOf(":");
+        int opening = oldValue.IndexOf("\"");
+        int closing = oldValue.IndexOf(":");
         int trimEnd = closing - opening;
-        string fieldName = Content.Substring(opening, trimEnd);
-        trimEnd = Content.Length - closing - 1;
-        string content = Content.Substring(closing + 1, trimEnd);
-        Content = content;
+        string fieldName = oldValue.Substring(opening, trimEnd);
+        trimEnd = oldValue.Length - closing - 1;
+        string value = oldValue.Substring(closing + 1, trimEnd);
 
         // 2
-        opening = Content.IndexOf("\"");
-        closing = Content.IndexOf(",");
-        string? value;
-
-        if (opening > closing) value = Content[..closing];
-        else value = Content[..opening];
+        opening = value.IndexOf("\"");
+        closing = value.IndexOf(",");
+        string? newValue;
+        int i = opening;
+        if(opening == -1) 
+        {
+            newValue = oldValue;
+            i = 0;
+        }
+        else if (opening > closing) 
+        {
+            closing += 1;
+            newValue = value[..closing];
+        }
+        else newValue = value[..opening];
         
 
         string dataType = TsType.Undefined;
-        int i;
-        // 3
-        opening = Content.IndexOf(":");
-        for (i = 0; i < value.Length && dataType == TsType.Undefined; i++)
+        
+
+        for (i = 0; i < newValue.Length && dataType == TsType.Undefined; i++)
         {
             
-            char chara = value[i];
+            char chara = newValue[i];
             switch (chara)
             {
                 case '[':
                     dataType = TsType.Array;
-                    closing = Content.IndexOf("}],");
+                    closing = value.IndexOf("}],");
+                    if (closing == -1) closing = value.IndexOf("}]");
                     break;
 
                 case '{':
                     dataType = TsType.Object;
-                    closing = Content.IndexOf("}},");
+                    closing = value.IndexOf("}},");
+                    if (closing > newValue.Length) closing = Content.IndexOf("}");
                     break;
 
                 case '"':
                     dataType = TsType.String;
-                    closing = Content.IndexOf(",");
+                    closing = value.IndexOf(",");
                     break;
 
                 case 'f':
                 case 't':
                     dataType = TsType.Boolean;
-                    closing = Content.IndexOf(",");
+                    closing = value.IndexOf(",");
                     break;
 
                 default:
                     if (char.IsDigit(chara))
                     {
                         dataType = TsType.Number;
-                        closing = Content.IndexOf(",");
+                        closing = value.IndexOf(",");
                     }
                     break;
             }
         }
-
-        if (closing == -1) throw new Exception("Closing has not been found");
-        value = Content.Substring(i + 1, closing);
-        return  new(fieldName.Replace("\"", ""), dataType, value, null);
+        if (opening == -1 && closing == -1) return new(fieldName.Replace("\"", ""), dataType, newValue, null);
+        else if (closing == -1) throw new Exception("Closing has not been found");
+        newValue = value.Substring(opening, closing - opening);
+        return  new(fieldName.Replace("\"", ""), dataType, newValue, null);
     }
 
 
@@ -198,11 +209,15 @@ public class JsonConverter
         if (CurrentObject != null)
         {
             PreviousObject = CurrentObject;
-            PreviousObject!.SetChild(obj);
             CurrentObject = obj;
             CurrentObject!.SetParent(PreviousObject);
             return true;
         }
         else throw new NullReferenceException("CurrentObject is null."); 
+    }
+
+    public TsClass? GetObject()
+    {
+        return Root;
     }
 }

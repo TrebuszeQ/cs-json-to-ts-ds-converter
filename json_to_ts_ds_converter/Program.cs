@@ -16,7 +16,9 @@ void InputLoop()
     {
         Console.Clear();
         Console.WriteLine("Provide file path to read JSON from.");
-        string? input = Console.ReadLine();
+        // string? input = Console.ReadLine();
+        // test only
+        string input = "/home/trebuszeq/Net/JsonConverter/json_to_ts_ds_converter/example.json";
         if (input == null) Console.WriteLine("Wrong input.");
         else
         {
@@ -27,5 +29,5 @@ void InputLoop()
     } while (true);
     Console.WriteLine("Success");
     lol.TraverseObjects();
-    Console.WriteLine(lol);
+    Console.WriteLine(lol.GetObject());
 }
