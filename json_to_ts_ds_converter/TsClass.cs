@@ -65,11 +65,18 @@ public class TsClass
 
     public string GetValue() => Value;
 
+    public void ChangeValue(string newValue) => Value = newValue;
 
     // returns true if Children already contains child.
     public bool IsChildPresent(TsClass obj)
     {
-        if (Children != null && Children.Count > 0) return Children!.Contains(obj);
-        else return false;
+        if (Children != null && Children.Count > 0) 
+        {
+            foreach(var indice in Children)
+            {
+                if(indice.ClassName == obj.ClassName) return true;
+            }
+        }
+        return false;
     }
 }

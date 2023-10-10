@@ -109,7 +109,7 @@ public class JsonConverter
             string value = CurrentObject.GetValue();
             for (int c = 0; c < value.Length; c++)
             {
-                TsClass obj = SeparateObjectValues(value);
+                TsClass obj = SeparateObjectValues();
                 if (CurrentObject.IsChildPresent(obj) == false)
                 {
                     CurrentObject!.SetChild(obj);
@@ -127,16 +127,20 @@ public class JsonConverter
 
 
     // separates objects from value of the current object 
-    private TsClass SeparateObjectValues(string oldValue)
+    private TsClass SeparateObjectValues()
     {
+        string oldValue = CurrentObject.GetValue();
         // 1
         int opening = oldValue.IndexOf("\"");
         int closing = oldValue.IndexOf(":");
         int trimEnd = closing - opening;
-        string fieldName = oldValue.Substring(opening, trimEnd);
-        trimEnd = oldValue.Length - closing - 1;
-        string value = oldValue.Substring(closing + 1, trimEnd);
+        StringBuilder oldValueB = new StringBuilder(oldValue, capacity: oldValue.Length);
 
+        // string fieldName = oldValue.Substring(opening, trimEnd);
+        string fieldName = oldValueB.ToString(opening, trimEnd);
+        trimEnd = oldValue.Length - closing - 1;
+        string value = oldValueB.ToString(closing + 1, trimEnd);
+        
         // 2
         opening = value.IndexOf("\"");
         closing = value.IndexOf(",");
@@ -144,7 +148,7 @@ public class JsonConverter
         int i = opening;
         if(opening == -1) 
         {
-            newValue = oldValue;
+            newValue = value;
             i = 0;
         }
         else if (opening > closing) 
@@ -155,10 +159,10 @@ public class JsonConverter
         else newValue = value[..opening];
         
 
-        string dataType = TsType.Undefined;
+        string dataType = TsType.Null;
         
 
-        for (i = 0; i < newValue.Length && dataType == TsType.Undefined; i++)
+        for (i = 0; i < newValue.Length && dataType == TsType.Null; i++)
         {
             
             char chara = newValue[i];
@@ -166,42 +170,55 @@ public class JsonConverter
             {
                 case '[':
                     dataType = TsType.Array;
-                    closing = value.IndexOf("}],");
+                    closing = value.IndexOf("}],") + 3;
                     if (closing == -1) closing = value.IndexOf("}]");
                     break;
 
                 case '{':
                     dataType = TsType.Object;
-                    closing = value.IndexOf("}},");
-                    if (closing > newValue.Length) closing = Content.IndexOf("}");
+                    closing = value.IndexOf("}},") + 3;
+                    if (closing > newValue.Length) closing = value.IndexOf("}") + 1;
                     break;
 
                 case '"':
                     dataType = TsType.String;
-                    closing = value.IndexOf(",");
+                    closing = value.IndexOf(",") + 1;
                     break;
 
                 case 'f':
                 case 't':
                     dataType = TsType.Boolean;
-                    closing = value.IndexOf(",");
+                    closing = value.IndexOf(",") + 1;
                     break;
 
                 default:
                     if (char.IsDigit(chara))
                     {
                         dataType = TsType.Number;
-                        closing = value.IndexOf(",");
+                        closing = value.IndexOf(",") + 1;
                     }
                     break;
             }
         }
+
         if (opening == -1 && closing == -1) return new(fieldName.Replace("\"", ""), dataType, newValue, null);
         else if (closing == -1) throw new Exception("Closing has not been found");
-        newValue = value.Substring(opening, closing - opening);
+        trimEnd = closing - opening;
+        newValue = value.Substring(opening, trimEnd);
+        trimEnd = value.Length - closing;
+        oldValue = value.Substring(closing + 1, trimEnd - 1);
+        ChangeParentsValue(oldValue);
         return  new(fieldName.Replace("\"", ""), dataType, newValue, null);
     }
 
+
+    // calls to change parents value to new value or throws exception
+    private bool ChangeParentsValue(string newValue)
+    {
+        if(CurrentObject != null) CurrentObject.ChangeValue(newValue);
+        else throw new NullReferenceException("Value of CurrentObject is null.");
+        return true;
+    }
 
     // sets CurrentObject and PreviousObject
     private bool SwitchObjects(TsClass obj)
