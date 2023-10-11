@@ -14,6 +14,7 @@ public class TsClass
     private TsClass? Child { get; set; }
     private List<TsClass>? Children { get; set; }
     private TsClass? Parent { get; set; }
+    private string? InitialValue {get; set; }
 
 
     public TsClass(string? className, string? type, string? value, TsClass? parent)
@@ -22,6 +23,7 @@ public class TsClass
         Parent = parent;
         ClassName = className; 
         Value = value;
+        InitialValue = value;
     }
 
 
@@ -65,7 +67,9 @@ public class TsClass
 
     public string GetValue() => Value;
 
-    public void ChangeValue(string newValue) => Value = newValue;
+    public string GetInitialValue() => InitialValue;
+    
+    public void SetValue(string newValue) => Value = newValue;
 
     // returns true if Children already contains child.
     public bool IsChildPresent(TsClass obj)
