@@ -64,6 +64,7 @@ public class JsonConverter
     }
 
 
+    // counts every brace opening in the value
     private int CountObjects()
     {
         int counter = 0;
@@ -85,8 +86,9 @@ public class JsonConverter
         {
             if(TraverseValue()) 
             {
+                if(PreviousObject == null) return true;
                 CurrentObject = PreviousObject;
-                PreviousObject = CurrentObject.GetParent();
+                PreviousObject = CurrentObject!.GetParent();
             } 
             TreeIndex = i;
         }
@@ -99,12 +101,19 @@ public class JsonConverter
     {
         if (CurrentObject != null)
         {
-            string value = CurrentObject.GetValue();
-            for (int c = 0; c < value.Length; c++)
+            string? value = CurrentObject.GetValue();
+            if(value == null) return true;
+            while(value != null)
             {    
-                string? fieldName = SeparateFieldName();
+                string? fieldName = SeparateFieldName(value);
                 if(fieldName == null) return true;
-                TsClass obj = SeparateObjectValues(fieldName);
+                value = CurrentObject.GetValue();
+                
+                string[] result = SeparateObjectValues2(value);
+                
+                TsClass obj = new TsClass(fieldName, result[1], result[0], CurrentObject);
+                value = CurrentObject.GetValue();
+
                 if (CurrentObject.IsChildPresent(obj) == false)
                 {
                     CurrentObject!.SetChild(obj);
@@ -122,105 +131,167 @@ public class JsonConverter
 
 
     // separates object field names from object values
-    private string? SeparateFieldName()
+    private string? SeparateFieldName(string value)
     {
-        string value = CurrentObject.GetValue();
-        // int opening = value.IndexOf("\"");
         int closing = value.IndexOf(":");
-        // int trimEnd = closing - opening;
-        // if(trimEnd <= 0) return null;
         if(closing <= 0) return null;
-        // string fieldName = value.Substring(opening, trimEnd);
-        // trimEnd = value.Length - closing - 1;
-        // CurrentObject.SetValue(value.Substring(closing + 1, trimEnd));
 
-        string fieldName = value[..closing];
-        int trimEnd = value.Length - closing - 1;
-        CurrentObject.SetValue(value.Substring(closing + 1, trimEnd));
-        return fieldName;
+        TrimObjectValue(value, value.Length - 1, closing + 1);
+
+        return value[..closing].Replace("\"", "").Replace("{", "");
     }
 
 
-    // separates objects from value of the current object 
-    private TsClass SeparateObjectValues(string fieldName)
+    // trims current object value
+    private string TrimObjectValue(string value, int closing, int? opening)
     {
-        string value = CurrentObject.GetValue();
-        // 2
-        int opening = value.IndexOf("\"");
-        int closing = value.IndexOf(",");
-        string? newValue;
+        string newValue;
+        if(opening == null) newValue = value[..closing];
+        else 
+        {
+            int trimEnd = closing - (int) opening;
+            newValue = value.Substring((int) opening, trimEnd);
+        }
         
+        CurrentObject!.SetValue(newValue);
+        return newValue;
+    }
 
-        if(opening <= -1) 
-        {
-            newValue = value;
-            opening = 0;
-        }
-        else if (opening > closing) 
-        {
-            closing += 1;
-            newValue = value[..closing];
-        }
-        else newValue = value[..opening];
 
+    private string[] SeparateObjectValues2(string value)
+    {
+        int closing = value.IndexOf("\n");
+        if (closing <= 0) closing = value.IndexOf(",");
+        if (closing <= 0) closing = value.Length - 1;
+        string typeString = value.Substring(0, closing);
+        int opening = 0;
         string dataType = TsType.Null;
-          
         
-        for (opening = 0; opening < newValue.Length && dataType == TsType.Null; opening++)
+        int closingNew = 0;
+        while(dataType == TsType.Null)
         {
-            
-            char chara = newValue[opening];
-            switch (chara)
+            char chara = typeString[opening];
+            value = value.Substring(opening);
+            switch(chara)
             {
                 case '[':
                     dataType = TsType.Array;
-                    closing = value.IndexOf("}],") + 3;
-                    if (closing == -1) closing = value.IndexOf("}]");
+                    opening++;
+                    closingNew = value.IndexOf("}],") + 3;
+                    if (closingNew == -1) closingNew = value.IndexOf("}]");
                     break;
 
                 case '{':
                     dataType = TsType.Object;
-                    closing = value.IndexOf("}},") + 3;
-                    if (closing > newValue.Length) closing = value.IndexOf("}") + 1;
+                    opening++;
+                    closingNew = value.IndexOf("},") + 2;
+                    if (closingNew == -1) closingNew = value.IndexOf('}') + 1;            
                     break;
 
                 case 'f':
                 case 't':
-                    if(newValue.Contains("true") || newValue.Contains("false")) dataType = TsType.Boolean;
+                    if(typeString.Contains("true") || typeString.Contains("false")) dataType = TsType.Boolean;
                     else dataType = TsType.String;
-                    closing = value.IndexOf(",") + 1;
+                    closingNew = value.IndexOf(",") + 1;
                     break;
 
                 case '"':
                     dataType = TsType.String;
-                    closing = value.IndexOf(",") + 1;
+                    closingNew = value.IndexOf(",") + 1;
                     break;
 
                 default:
                     if (char.IsDigit(chara))
                     {
                         dataType = TsType.Number;
-                        closing = value.IndexOf(",") + 1;
+                        closingNew = value.IndexOf(",") + 1;
                     }
                     else if(char.IsLetter(chara))
                     {
                         dataType = TsType.String;
-                        closing = value.IndexOf(",") + 1;
+                        closingNew = value.IndexOf(",") + 1;
+                    }
+                    break;
+            }
+            opening++;
+        }
+        //string, digits, bool should trim starting from closingNew to valueLength - closingNew - 1
+        if(dataType == TsType.Array || dataType == TsType.Object) value = TrimObjectValue(value, closingNew, opening);
+        else value = TrimObjectValue(value, value.Length - 1, closingNew);
+        
+        string[] result = {value, dataType};
+        return result;
+    }
+
+
+    // separates objects from value of the current object 
+    private TsClass SeparateObjectValues(string fieldName, string value)
+    {
+        // 2
+        int closingObj = value.IndexOf("\"");
+        if (closingObj <= 0) closingObj = value.IndexOf(",");
+         
+        string? newValue = value[..closingObj];
+        string dataType = TsType.Null;
+          
+        int opening = 0;
+        int closingNew = 0;
+        for (; opening < newValue.Length && dataType == TsType.Null; opening++)
+        {
+            char chara = newValue[opening];
+            switch (chara)
+            {
+                case '[':
+                    dataType = TsType.Array;
+                    closingNew = value.IndexOf("}],") + 3;
+                    if (closingNew == -1) closingNew = value.IndexOf("}]");
+                    break;
+
+                case '{':
+                    dataType = TsType.Object;
+                    closingNew = value.IndexOf("}},") + 3;
+                    if (closingNew > newValue.Length) closingNew = value.IndexOf("}") + 1;
+                    break;
+
+                case 'f':
+                case 't':
+                    if(newValue.Contains("true") || newValue.Contains("false")) dataType = TsType.Boolean;
+                    else dataType = TsType.String;
+                    closingNew = value.IndexOf(",") + 1;
+                    break;
+
+                case '"':
+                    dataType = TsType.String;
+                    closingNew = value.IndexOf(",") + 1;
+                    break;
+
+                default:
+                    if (char.IsDigit(chara))
+                    {
+                        dataType = TsType.Number;
+                        closingNew = value.IndexOf(",") + 1;
+                    }
+                    else if(char.IsLetter(chara))
+                    {
+                        dataType = TsType.String;
+                        closingNew = value.IndexOf(",") + 1;
                     }
                     break;
             }
         }
-
-        if(closing == 0) closing = value.LastIndexOf("\n");
-        if (closing < 0) return new(fieldName.Replace("\"", ""), dataType, newValue, null);
-        // if (opening == -1 && closing == -1) return new(fieldName.Replace("\"", ""), dataType, newValue, null);
-        else if (closing == 0) closing = value.LastIndexOf("\"") + 1;
-        else if (closing == -1) throw new Exception("Closing has not been found");
-        int trimEnd = closing - opening;
-        newValue = value.Substring(opening, trimEnd);
-        trimEnd = value.Length - closing;
-        string oldValue = value.Substring(closing + 1, trimEnd - 1);
-        ChangeParentsValue(oldValue);
+    
+        // opening += 1;
+        switch (closingNew)
+        {
+            case 0:
+                closingNew = value.LastIndexOf("\"") + 1;
+                break;                
+            case -1:
+                newValue = TrimObjectValue(value, value.Length - 1, null);
+                return new(fieldName, dataType, newValue, null);
+        }
+         
+        newValue = TrimObjectValue(value, closingNew, opening);
 
         if (newValue.Length == 0) return new(fieldName.Replace("\"", ""), dataType, null, null);
         else return  new(fieldName.Replace("\"", ""), dataType, newValue, null);
@@ -228,7 +299,7 @@ public class JsonConverter
 
 
     // calls to change parents value to new value or throws exception
-    private bool ChangeParentsValue(string newValue)
+    private bool ChangeParentsValue(string? newValue)
     {
         if(CurrentObject != null) CurrentObject.SetValue(newValue);
         else throw new NullReferenceException("Value of CurrentObject is null.");
