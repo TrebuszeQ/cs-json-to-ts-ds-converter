@@ -7,10 +7,7 @@ namespace CsClassToTsConverter;
 
 public class JsonConverter
 {
-    private string? FileName;
-    private string Path { get; set; }
-    private bool? FileExists { get; set;}
-    private bool? IsJson { get; set; }
+    private string Path;
     private Dictionary<string, string>? FileCache = new Dictionary<string, string>();
     private string Content;
     private TsClass Root;
@@ -18,13 +15,15 @@ public class JsonConverter
     public JsonConverter(string path)
     {
         Path = path;
-        FileName = SeparateFileName(path);
+        string FileName = SeparateFileName(path);
         Console.WriteLine("Extension: " + System.IO.Path.GetExtension(FileName));
         Debug.WriteLine("Extension: " + System.IO.Path.GetExtension(FileName));
         try
         {
-            FileExists = System.IO.Path.Exists(path) ? true : throw new ArgumentException("Path is not accessible or doesn't exist.");
-            IsJson = System.IO.Path.GetExtension(FileName) == ".json" ? true : throw new ArgumentException("The file is not a valid JSON file");
+            bool FileExists = System.IO.Path.Exists(path) ? true : throw new ArgumentException("Path is not accessible or doesn't exist.");
+            if(!FileExists) throw new Exception("File doesn't exist or is inaccessible.");
+            bool IsJson = System.IO.Path.GetExtension(FileName) == ".json" ? true : throw new ArgumentException("The file is not a valid JSON file");
+            if(!IsJson) throw new Exception("File doesn't exist or is inaccessible.");
         }
         catch (ArgumentException e)
         {
@@ -79,24 +78,27 @@ public class JsonConverter
         TsClass CurrentObject = this.Root;
         TsClass? PreviousObject = null;
         int objectsCount = CountObjects();
-        string Value = CurrentObject.GetValue();
+        // string Value = CurrentObject.GetValue();
 
         for (int i = 0; i < objectsCount; i++)
         {
             if (CurrentObject != null)
             {
-                string value = Value;
+                string value = CurrentObject.GetValue();
 
                 while (value != null)
                 {
                     // fieldName
-                    value = Value;
                     int closing = value.IndexOf(":");
                     if (closing <= 0) break;
                     string fieldName = value[..closing].Replace("\"", "").Replace("{", "");
                     if (fieldName == null) break;
                     // trim value
-                    value = value.Substring(closing, Value.Length - closing - 1);
+                    int trimEnd = value.Length - closing - 1;
+                    value = value.Substring(closing, trimEnd);
+                    //trim parent
+                    CurrentObject.SetValue(value);
+                    
 
                     //value
                     closing = value.IndexOf(",");
@@ -156,11 +158,15 @@ public class JsonConverter
                         if (closingNew == -1 || closingNew == 0) closingNew = value.Length - 1;
 
                         //string, digits, bool should trim starting from closingNew to valueLength - closingNew - 1
-                        if (dataType == TsType.Array || dataType == TsType.Object) value = value.Substring(opening, closingNew - opening);
+                        if (dataType == TsType.Array || dataType == TsType.Object) 
+                        {
+                            value = value.Substring(opening, closingNew - opening);
+                            CurrentObject.SetValue(value);
+                        }
                         else
                         {
-                            Value = value.Substring(closingNew, value.Length - 1 - closingNew);
-                            value = value.Substring(opening, closingNew - opening);
+
+                            
                         }
                    
 
@@ -177,8 +183,11 @@ public class JsonConverter
                             CurrentObject!.SetParent(PreviousObject);
 
                             // remove value of current object from previous object
-                            value = Value.Substring(closingNew + fieldName.Length, Value.Length - closingNew - fieldName.Length);
-                            PreviousObject.SetValue(value);
+                            string newVal = PreviousObject.GetValue();
+                            trimEnd = newVal.Length - 1 - value.Length - 1;
+                            newVal = newVal.Substring(value.Length - 1, trimEnd);
+                            // substring cuts about 2 chars too less
+                            PreviousObject.SetValue(newVal);
                         }
                     }
                 }
