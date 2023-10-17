@@ -90,9 +90,27 @@ public class JsonConverter
                 {
                     // fieldName
                     int closing = value.IndexOf(":");
-                    if (closing <= 0) break;
+                    if (closing <= 0) 
+                    {
+                        value = null;
+                        break;
+                    }
                     string fieldName = value[..closing].Replace("\"", "").Replace("{", "");
-                    if (fieldName == null) break;
+                    if (fieldName == null) 
+                    {
+                        value = null;
+                        break;
+                    }
+
+
+                    // dump clones
+                    bool truth = CurrentObject.IsChildPresent(fieldName);    
+                    if (truth) 
+                    {
+                        value = null;
+                        break;
+                    }
+
                     // trim value
                     int trimEnd = value.Length - closing - 1;
                     value = value.Substring(closing, trimEnd);
@@ -155,41 +173,40 @@ public class JsonConverter
                         opening++;
                     }
 
-                        if (closingNew == -1 || closingNew == 0) closingNew = value.Length - 1;
+                    if (closingNew == -1 || closingNew == 0) closingNew = value.Length - 1;
 
-                        //string, digits, bool should trim starting from closingNew to valueLength - closingNew - 1
-                        if (dataType == TsType.Array || dataType == TsType.Object) 
-                        {
-                            value = value.Substring(opening, closingNew - opening);
-                            CurrentObject.SetValue(value);
-                        }
-                        else
-                        {
-
-                            
-                        }
-                   
-
-                    TsClass obj = new TsClass(fieldName, dataType, value, CurrentObject);
-                    
-                    // switch object
-                    if (CurrentObject.IsChildPresent(obj) == false)
+                    //string, digits, bool should trim starting from closingNew to valueLength - closingNew - 1
+                    if(dataType == TsType.Object || dataType == TsType.Array)
                     {
+                        trimEnd = closingNew - opening;
+                        value = value.Substring(opening, trimEnd);
+                        
+                        TsClass obj = new TsClass(fieldName, dataType, value, CurrentObject);
                         CurrentObject!.SetChild(obj);
-                        if (obj.GetDType() == TsType.Object || obj.GetDType() == TsType.Array)
-                        {
-                            PreviousObject = CurrentObject;
-                            CurrentObject = obj;
-                            CurrentObject!.SetParent(PreviousObject);
+                        
+                        PreviousObject = CurrentObject;
+                        CurrentObject = obj;
+                        CurrentObject!.SetParent(PreviousObject);
+                        // CurrentObject.SetValue(value);
 
-                            // remove value of current object from previous object
-                            string newVal = PreviousObject.GetValue();
-                            trimEnd = newVal.Length - 1 - value.Length - 1;
-                            newVal = newVal.Substring(value.Length - 1, trimEnd);
-                            // substring cuts about 2 chars too less
-                            PreviousObject.SetValue(newVal);
-                        }
+                        // remove value of current object from previous object
+                        string newVal = PreviousObject.GetValue();
+                        trimEnd = newVal.Length - value.Length - opening;
+                        newVal = newVal.Substring(value.Length, trimEnd);
+                        // substring cuts about 2 chars too less
+                        PreviousObject.SetValue(newVal);
+                        
                     }
+                    else
+                    {
+                        trimEnd = value.Length - closingNew;
+                        value = value.Substring(closingNew, trimEnd);
+
+                        CurrentObject.SetValue(value);
+                        TsClass obj = new TsClass(fieldName, dataType, value, CurrentObject);
+                        CurrentObject!.SetChild(obj);
+                    }
+                    
                 }
             }
             else throw new NullReferenceException("CurrentObject is null.");
@@ -200,191 +217,191 @@ public class JsonConverter
         return false;
     }
 
-    public bool ConvertJson()
-    {
-        int TreeIndex = 0;
-        TsClass CurrentObject = this.Root;
-        TsClass? PreviousObject = null;
-        //string Value;
+    // public bool ConvertJson()
+    // {
+    //     int TreeIndex = 0;
+    //     TsClass CurrentObject = this.Root;
+    //     TsClass? PreviousObject = null;
+    //     //string Value;
 
-        // traverses through objects value, if successfull it returns true, if not it throws exception.
-        // when it ReturnObject() returns Object or Array it calls to switch Objects and sets relation.
-        bool TraverseObjects()
-        {
-            int objectsCount = CountObjects();
-            for (int i = TreeIndex; i < objectsCount; i++)
-            {
-                if (TraverseValue())
-                {
-                    if (PreviousObject == null) return true;
-                    CurrentObject = PreviousObject;
-                    PreviousObject = CurrentObject!.GetParent();
-                }
-                TreeIndex = i;
-            }
-            return true;
-        }
-
-
-        // traverses through value variable of an object. If array or obj is found it switches to this object.
-        bool TraverseValue()
-        {
-            if (CurrentObject != null)
-            {
-                string? value = CurrentObject.GetValue();
-                if (value == null) return true;
-                while (value != null)
-                {
-                    value = CurrentObject.GetValue();
-                    string? fieldName = SeparateFieldName(value);
-                    if (fieldName == null) return true;
-                    value = CurrentObject.GetValue();
-
-                    string[] result = SeparateObjectValues2(value);
-
-                    TsClass obj = new TsClass(fieldName, result[1], result[0], CurrentObject);
-                    value = CurrentObject.GetValue();
-
-                    if (CurrentObject.IsChildPresent(obj) == false)
-                    {
-                        CurrentObject!.SetChild(obj);
-                        if (obj.GetDType() == TsType.Object || obj.GetDType() == TsType.Array)
-                        {
-                            SwitchObjects(obj);
-                            TraverseValue();
-                        }
-                    }
-                    value = CurrentObject.GetValue();
-                }
-                return false;
-            }
-            else throw new NullReferenceException("Value of value variable is null.");
-        }
+    //     // traverses through objects value, if successfull it returns true, if not it throws exception.
+    //     // when it ReturnObject() returns Object or Array it calls to switch Objects and sets relation.
+    //     // bool TraverseObjects()
+    //     // {
+    //     //     int objectsCount = CountObjects();
+    //     //     for (int i = TreeIndex; i < objectsCount; i++)
+    //     //     {
+    //     //         if (TraverseValue())
+    //     //         {
+    //     //             if (PreviousObject == null) return true;
+    //     //             CurrentObject = PreviousObject;
+    //     //             PreviousObject = CurrentObject!.GetParent();
+    //     //         }
+    //     //         TreeIndex = i;
+    //     //     }
+    //     //     return true;
+    //     // }
 
 
-        // separates object field names from object values
-        string? SeparateFieldName(string value)
-        {
-            int closing = value.IndexOf(":");
-            if (closing <= 0) return null;
+    //     // traverses through value variable of an object. If array or obj is found it switches to this object.
+    //     // bool TraverseValue()
+    //     // {
+    //     //     if (CurrentObject != null)
+    //     //     {
+    //     //         string? value = CurrentObject.GetValue();
+    //     //         if (value == null) return true;
+    //     //         while (value != null)
+    //     //         {
+    //     //             value = CurrentObject.GetValue();
+    //     //             string? fieldName = SeparateFieldName(value);
+    //     //             if (fieldName == null) return true;
+    //     //             value = CurrentObject.GetValue();
 
-            TrimObjectValue(value, value.Length - 1, closing + 1);
+    //     //             string[] result = SeparateObjectValues2(value);
 
-            return value[..closing].Replace("\"", "").Replace("{", "");
-        }
+    //     //             TsClass obj = new TsClass(fieldName, result[1], result[0], CurrentObject);
+    //     //             value = CurrentObject.GetValue();
 
-
-        // trims current object value
-        string? TrimObjectValue(string value, int closing, int? opening)
-        {
-            string newValue;
-            if (opening == null) newValue = value[..closing];
-            else
-            {
-                int trimEnd = closing - (int)opening;
-                newValue = value.Substring((int)opening, trimEnd);
-            }
-
-            if (string.IsNullOrEmpty(newValue)) return null;
-            CurrentObject!.SetValue(newValue);
-            return newValue;
-        }
-
-
-        string[] SeparateObjectValues2(string value)
-        {
-            int closing = value.IndexOf("\n");
-            if (closing <= 0) closing = value.IndexOf(",");
-            if (closing <= 0) closing = value.Length - 1;
-            string typeString = value.Substring(0, closing);
-            int opening = 0;
-            string dataType = TsType.Null;
-
-            int closingNew = 0;
-            while (dataType == TsType.Null)
-            {
-                char chara = typeString[opening];
-                switch (chara)
-                {
-                    case '[':
-                        dataType = TsType.Array;
-                        opening++;
-                        closingNew = value.IndexOf("}],") + 3;
-                        if (closingNew == -1) closingNew = value.IndexOf("}]");
-                        break;
-
-                    case '{':
-                        dataType = TsType.Object;
-                        opening++;
-                        closingNew = value.IndexOf("},") + 2;
-                        if (closingNew == -1) closingNew = value.IndexOf('}') + 1;
-                        break;
-
-                    case 'f':
-                    case 't':
-                        if (typeString.Contains("true") || typeString.Contains("false")) dataType = TsType.Boolean;
-                        else dataType = TsType.String;
-                        closingNew = value.IndexOf(",") + 1;
-                        break;
-
-                    case '"':
-                        dataType = TsType.String;
-                        closingNew = value.IndexOf(",") + 1;
-                        break;
-
-                    default:
-                        if (char.IsDigit(chara))
-                        {
-                            dataType = TsType.Number;
-                            closingNew = value.IndexOf(",") + 1;
-                        }
-                        else if (char.IsLetter(chara))
-                        {
-                            dataType = TsType.String;
-                            closingNew = value.IndexOf(",") + 1;
-                        }
-                        break;
-                }
-                opening++;
-            }
-
-            if (closingNew == -1 || closingNew == 0) closingNew = value.Length - 1;
-
-            //string, digits, bool should trim starting from closingNew to valueLength - closingNew - 1
-            if (dataType == TsType.Array || dataType == TsType.Object) value = TrimObjectValue(value, closingNew, opening);
-            else
-            {
-                TrimObjectValue(value, value.Length - 1, closingNew);
-                value = value.Substring(opening, closingNew - opening);
-            }
-
-            string[] result = { value, dataType };
-            return result;
-        }
+    //     //             if (CurrentObject.IsChildPresent(obj) == false)
+    //     //             {
+    //     //                 CurrentObject!.SetChild(obj);
+    //     //                 if (obj.GetDType() == TsType.Object || obj.GetDType() == TsType.Array)
+    //     //                 {
+    //     //                     SwitchObjects(obj);
+    //     //                     TraverseValue();
+    //     //                 }
+    //     //             }
+    //     //             value = CurrentObject.GetValue();
+    //     //         }
+    //     //         return false;
+    //     //     }
+    //     //     else throw new NullReferenceException("Value of value variable is null.");
+    //     // }
 
 
-        // sets CurrentObject and PreviousObject
-        bool SwitchObjects(TsClass obj)
-        {
-            if (CurrentObject != null)
-            {
-                PreviousObject = CurrentObject;
-                CurrentObject = obj;
-                CurrentObject!.SetParent(PreviousObject);
+    //     // separates object field names from object values
+    //     string? SeparateFieldName(string value)
+    //     {
+    //         int closing = value.IndexOf(":");
+    //         if (closing <= 0) return null;
 
-                // remove value of current object from previous object
-                string oldValue = PreviousObject.GetValue();
-                string newValue = CurrentObject.GetValue();
-                string value = oldValue.Substring(0, oldValue.Length - newValue.Length - 1);
-                PreviousObject.SetValue(value);
+    //         TrimObjectValue(value, value.Length - 1, closing + 1);
 
-                return true;
-            }
-            else throw new NullReferenceException("CurrentObject is null.");
-        }
+    //         return value[..closing].Replace("\"", "").Replace("{", "");
+    //     }
 
-        return false;
-    }
+
+    //     // trims current object value
+    //     string? TrimObjectValue(string value, int closing, int? opening)
+    //     {
+    //         string newValue;
+    //         if (opening == null) newValue = value[..closing];
+    //         else
+    //         {
+    //             int trimEnd = closing - (int)opening;
+    //             newValue = value.Substring((int)opening, trimEnd);
+    //         }
+
+    //         if (string.IsNullOrEmpty(newValue)) return null;
+    //         CurrentObject!.SetValue(newValue);
+    //         return newValue;
+    //     }
+
+
+    //     string[] SeparateObjectValues2(string value)
+    //     {
+    //         int closing = value.IndexOf("\n");
+    //         if (closing <= 0) closing = value.IndexOf(",");
+    //         if (closing <= 0) closing = value.Length - 1;
+    //         string typeString = value.Substring(0, closing);
+    //         int opening = 0;
+    //         string dataType = TsType.Null;
+
+    //         int closingNew = 0;
+    //         while (dataType == TsType.Null)
+    //         {
+    //             char chara = typeString[opening];
+    //             switch (chara)
+    //             {
+    //                 case '[':
+    //                     dataType = TsType.Array;
+    //                     opening++;
+    //                     closingNew = value.IndexOf("}],") + 3;
+    //                     if (closingNew == -1) closingNew = value.IndexOf("}]");
+    //                     break;
+
+    //                 case '{':
+    //                     dataType = TsType.Object;
+    //                     opening++;
+    //                     closingNew = value.IndexOf("},") + 2;
+    //                     if (closingNew == -1) closingNew = value.IndexOf('}') + 1;
+    //                     break;
+
+    //                 case 'f':
+    //                 case 't':
+    //                     if (typeString.Contains("true") || typeString.Contains("false")) dataType = TsType.Boolean;
+    //                     else dataType = TsType.String;
+    //                     closingNew = value.IndexOf(",") + 1;
+    //                     break;
+
+    //                 case '"':
+    //                     dataType = TsType.String;
+    //                     closingNew = value.IndexOf(",") + 1;
+    //                     break;
+
+    //                 default:
+    //                     if (char.IsDigit(chara))
+    //                     {
+    //                         dataType = TsType.Number;
+    //                         closingNew = value.IndexOf(",") + 1;
+    //                     }
+    //                     else if (char.IsLetter(chara))
+    //                     {
+    //                         dataType = TsType.String;
+    //                         closingNew = value.IndexOf(",") + 1;
+    //                     }
+    //                     break;
+    //             }
+    //             opening++;
+    //         }
+
+    //         if (closingNew == -1 || closingNew == 0) closingNew = value.Length - 1;
+
+    //         //string, digits, bool should trim starting from closingNew to valueLength - closingNew - 1
+    //         if (dataType == TsType.Array || dataType == TsType.Object) value = TrimObjectValue(value, closingNew, opening);
+    //         else
+    //         {
+    //             TrimObjectValue(value, value.Length - 1, closingNew);
+    //             value = value.Substring(opening, closingNew - opening);
+    //         }
+
+    //         string[] result = { value, dataType };
+    //         return result;
+    //     }
+
+
+    //     // sets CurrentObject and PreviousObject
+    //     bool SwitchObjects(TsClass obj)
+    //     {
+    //         if (CurrentObject != null)
+    //         {
+    //             PreviousObject = CurrentObject;
+    //             CurrentObject = obj;
+    //             CurrentObject!.SetParent(PreviousObject);
+
+    //             // remove value of current object from previous object
+    //             string oldValue = PreviousObject.GetValue();
+    //             string newValue = CurrentObject.GetValue();
+    //             string value = oldValue.Substring(0, oldValue.Length - newValue.Length - 1);
+    //             PreviousObject.SetValue(value);
+
+    //             return true;
+    //         }
+    //         else throw new NullReferenceException("CurrentObject is null.");
+    //     }
+
+    //     return false;
+    // }
     
 
     public TsClass? GetObject()

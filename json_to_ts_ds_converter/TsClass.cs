@@ -72,13 +72,13 @@ public class TsClass
     public void SetValue(string newValue) => Value = newValue;
 
     // returns true if Children already contains child.
-    public bool IsChildPresent(TsClass obj)
+    public bool IsChildPresent(string className)
     {
         if (Children != null && Children.Count > 0) 
         {
             foreach(var indice in Children)
             {
-                if(indice.ClassName == obj.ClassName) return true;
+                if(indice.ClassName == className) return true;
             }
         }
         return false;
