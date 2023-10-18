@@ -79,13 +79,13 @@ public class JsonConverter
         TsClass? PreviousObject = null;
         int objectsCount = CountObjects();
         // string Value = CurrentObject.GetValue();
-
+    
         for (int i = 0; i < objectsCount; i++)
         {
             if (CurrentObject != null)
             {
                 string value = CurrentObject.GetValue();
-
+        
                 while (value != null)
                 {
                     // fieldName
@@ -117,6 +117,7 @@ public class JsonConverter
                     //trim parent
                     CurrentObject.SetValue(value);
                     
+                    
 
                     //value
                     closing = value.IndexOf(",");
@@ -124,8 +125,18 @@ public class JsonConverter
                     string typeString = value.Substring(0, closing);
                     int opening = 0;
                     string dataType = TsType.Null;
-
+                
                     int closingNew = 0;
+
+                    int findIndex(string desired)
+                    {
+                        for(int x = opening; x < value.Length -1; x++)
+                        {
+                            if(desired.Equals(value[x])) return x;
+                        }
+                        return value.Length -1;
+                    }
+
                     while (dataType == TsType.Null)
                     {
                         char chara = typeString[opening];
@@ -134,47 +145,33 @@ public class JsonConverter
                             case '[':
                                 dataType = TsType.Array;
                                 opening++;
-                                closingNew = value.IndexOf("}],") + 3;
-                                if (closingNew == -1) closingNew = value.IndexOf("}]");
+                                closingNew = findIndex("}]") + 3;
                                 break;
 
                             case '{':
                                 dataType = TsType.Object;
                                 opening++;
-                                closingNew = value.IndexOf("},") + 2;
-                                if (closingNew == -1) closingNew = value.IndexOf('}') + 1;
+                                closingNew = findIndex("}");
                                 break;
 
                             case 'f':
                             case 't':
                                 if (typeString.Contains("true") || typeString.Contains("false")) dataType = TsType.Boolean;
                                 else dataType = TsType.String;
-                                closingNew = value.IndexOf(",") + 1;
                                 break;
 
                             case '"':
                                 dataType = TsType.String;
-                                closingNew = value.IndexOf(",") + 1;
                                 break;
 
                             default:
-                                if (char.IsDigit(chara))
-                                {
-                                    dataType = TsType.Number;
-                                    closingNew = value.IndexOf(",") + 1;
-                                }
-                                else if (char.IsLetter(chara))
-                                {
-                                    dataType = TsType.String;
-                                    closingNew = value.IndexOf(",") + 1;
-                                }
+                                if (char.IsDigit(chara)) dataType = TsType.Number;
+                                else if (char.IsLetter(chara)) dataType = TsType.String;
                                 break;
                         }
                         opening++;
                     }
-
-                    if (closingNew == -1 || closingNew == 0) closingNew = value.Length - 1;
-
+                    if (closingNew != -2) closingNew = findIndex(",") + 1;
                     //string, digits, bool should trim starting from closingNew to valueLength - closingNew - 1
                     if(dataType == TsType.Object || dataType == TsType.Array)
                     {
@@ -201,7 +198,7 @@ public class JsonConverter
                     {
                         trimEnd = value.Length - closingNew;
                         value = value.Substring(closingNew, trimEnd);
-
+                        closingNew = -2;
                         CurrentObject.SetValue(value);
                         TsClass obj = new TsClass(fieldName, dataType, value, CurrentObject);
                         CurrentObject!.SetChild(obj);
