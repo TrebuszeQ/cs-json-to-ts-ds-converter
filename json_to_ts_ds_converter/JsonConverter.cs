@@ -37,7 +37,7 @@ public class JsonConverter
     {
         int closing = path.LastIndexOf('/');
         if (closing == -1) closing = path.LastIndexOf('\\');
-        return path.Substring(closing + 1, path.Length - closing - 1);
+        return path.Substring(closing + 1, Math.Abs(path.Length - closing - 1));
     }
 
 
@@ -58,33 +58,17 @@ public class JsonConverter
     }
 
 
-    // counts every brace opening in the value
-    private int CountObjects()
-    {
-        int counter = 0;
-        foreach (char chara in Content)
-        {
-            if (chara == '{' || chara == '[') counter++;
-        }
-
-        return counter;
-    }
-
-
     public bool Convert()
     {
-        TsClass CurrentObject = this.Root;
+        TsClass CurrentObject = Root;
         TsClass? PreviousObject = null;
-        int objectsCount = CountObjects();
         // string Value = CurrentObject.GetValue();
-    
-        for (int i = 0; i < objectsCount; i++)
+        while (true)
         {
             if (CurrentObject != null)
             {
                 string? value = CurrentObject.GetValue();
-        
-                while (value != null)
+                while (value != null && value.Length > 0)
                 {
                     // fieldName
                     int closing = value.IndexOf(":");
@@ -94,27 +78,40 @@ public class JsonConverter
                         CurrentObject.SetValue(value);
                         break;
                     }
-                    string fieldName = value[..closing].Replace("\"", "").Replace("{", "");
+
+                    string fieldName = value[..closing];
+                    
                     if (fieldName == null) 
                     {
                         value = null;
                         CurrentObject.SetValue(value);
                         break;
                     }
+                    // else if(fieldName != null)
+                    // {
+                    //     StringBuilder fieldNameCleared = new StringBuilder(capacity: fieldName.Length);
+                    //     for(int i = 0; i < fieldName.Length; i++)
+                    //     {
+                    //         char chara = fieldName[i];
+                    //         if(char.IsLetter(chara)) fieldNameCleared.Append(chara);
+                            
+                    //     }
+                    //     fieldName = fieldNameCleared.ToString();
+                    // }
 
+                    
 
                     // dump clones
                     bool truth = CurrentObject.IsChildPresent(fieldName);    
                     if (truth) 
                     {
-                        value = null;
-                        CurrentObject.SetValue(value);
+                        CurrentObject.SetValue(null);
                         break;
                     }
 
-                    // trim value
+                    // trim value from fieldname
                     int trimEnd = value.Length - closing - 1;
-                    value = value.Substring(closing, trimEnd);
+                    value = value.Substring(closing + 1, Math.Abs(trimEnd));
                     //trim parent
                     CurrentObject.SetValue(value);
                     
@@ -122,8 +119,9 @@ public class JsonConverter
 
                     //value
                     closing = value.IndexOf(",");
-                    if (closing <= 0) closing = value.Length - 1;
-                    string typeString = value.Substring(0, closing);
+                    if (closing <= 0) closing = value.Length;
+                    
+                    string typeString = value.Substring(0, Math.Abs(closing));
                     int opening = 0;
                     string dataType = TsType.Null;
                 
@@ -135,71 +133,74 @@ public class JsonConverter
                         {
                             if(desired.Equals(value[x])) return x;
                         }
-                        return value.Length - 1;
+                        return value.Length;
                     }
 
                     truth = true;
-                    do
+                    if (typeString.Length > 0)
                     {
-                        char chara = typeString[opening];
-                        switch (chara)
+                        while (truth) 
                         {
-                            case '[':
-                                dataType = TsType.Array;
-                                opening++;
-                                closingNew = findIndex(']');
-                                truth = false;
-                                break;
-
-                            case '{':
-                                dataType = TsType.Object;
-                                opening++;
-                                closingNew = findIndex('}');
-                                truth = false;
-                                break;
-
-                            case 'f':
-                            case 't':
-                                if (typeString.Contains("true") || typeString.Contains("false")) dataType = TsType.Boolean;
-                                else dataType = TsType.String;
-                                truth = false;
-                                break;
-
-                            case '"':
-                                dataType = TsType.String;
-                                truth = false;
-                                break;
-
-                            case 'n':
-                                if(typeString.Contains("null")) truth = false;
-                                else 
-                                {
-                                    dataType = TsType.String;
-                                    truth = false;   
-                                }
-                                break;
-
-                            default:
-                                if (char.IsDigit(chara)) 
-                                {
-                                    dataType = TsType.Number;
+                            if(opening == fieldName.Length) break;
+                            char chara = typeString[opening];
+                            switch (chara)
+                            {
+                                case '[':
+                                    dataType = TsType.Array;
+                                    closingNew = findIndex(']');
                                     truth = false;
-                                }
-                                else if (char.IsLetter(chara)) 
-                                {
+                                    break;
+
+                                case '{':
+                                    dataType = TsType.Object;
+                                    closingNew = findIndex('}');
+                                    truth = false;
+                                    break;
+
+                                case 'f':
+                                case 't':
+                                    if (typeString.Contains("true") || typeString.Contains("false")) dataType = TsType.Boolean;
+                                    else dataType = TsType.String;
+                                    truth = false;
+                                    break;
+
+                                case '"':
                                     dataType = TsType.String;
                                     truth = false;
-                                }
-                                break;
-                        } while (truth);
-                        opening++;
+                                    break;
+
+                                case 'n':
+                                    if(typeString.Contains("null")) truth = false;
+                                    else 
+                                    {
+                                        dataType = TsType.String;
+                                        truth = false;   
+                                    }
+                                    break;
+
+                                default:
+                                    if (char.IsDigit(chara)) 
+                                    {
+                                        dataType = TsType.Number;
+                                        truth = false;
+                                    }
+                                    else if (char.IsLetter(chara)) 
+                                    {
+                                        dataType = TsType.String;
+                                        truth = false;
+                                    }
+                                    break;
+                            } 
+                            opening++;
+                        };
                     }
+                    
                     if (closingNew == -2) closingNew = findIndex(',');
                     //string, digits, bool should trim starting from closingNew to valueLength - closingNew - 1
                     if(dataType == TsType.Object || dataType == TsType.Array)
                     {
                         trimEnd = closingNew - opening;
-                        if (trimEnd > 0) value = value.Substring(opening, trimEnd);
+                        if (trimEnd > 0) value = value.Substring(opening, Math.Abs(trimEnd));
                         else value = null;
                         
                         TsClass obj = new TsClass(fieldName, dataType, value, CurrentObject);
@@ -215,21 +216,21 @@ public class JsonConverter
                         if(value == null) 
                         {
                             trimEnd = newVal.Length - opening - 1;
-                            newVal = newVal.Substring(1 + opening, trimEnd);
+                            newVal = newVal.Substring(1 + opening, Math.Abs(trimEnd));
                         }
                         else 
                         {
-                            trimEnd = newVal.Length - value.Length - opening - 1;
-                            newVal = newVal.Substring(value.Length + 1 + opening, trimEnd);
+                            trimEnd = newVal.Length - value.Length - opening;
+                            newVal = newVal.Substring(value.Length + opening, Math.Abs(trimEnd));
                         }
                         // substring cuts about 2 chars too less
                         PreviousObject.SetValue(newVal);
-                        
                     }
                     else
                     {
-                        trimEnd = value.Length - closingNew;
-                        value = value.Substring(closingNew, trimEnd);
+                        trimEnd = value.Length - closingNew - 1;
+                        if(trimEnd < 0) value = null;
+                        else value = value.Substring(closingNew + 1, Math.Abs(trimEnd));
                         CurrentObject.SetValue(value);
                         TsClass obj = new TsClass(fieldName, dataType, value, CurrentObject);
                         CurrentObject!.SetChild(obj);
@@ -237,12 +238,11 @@ public class JsonConverter
                     
                 }
             }
-            else throw new NullReferenceException("CurrentObject is null.");
-            if (CurrentObject == null) return true;
             CurrentObject = PreviousObject;
-            PreviousObject = CurrentObject!.GetParent();
+            if(CurrentObject == null) break;
+            PreviousObject = CurrentObject!.GetParent();            
         }
-        return false;
+        return true;
     }
 
     // public bool ConvertJson()
