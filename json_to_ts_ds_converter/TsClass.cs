@@ -21,7 +21,7 @@ public class TsClass
     {
         DataType = type;
         Parent = parent;
-        ClassName = className; 
+        ClassName = ClearName(className); 
         Value = value;
         InitialValue = value;
     }
@@ -54,8 +54,13 @@ public class TsClass
     public TsClass? GetChild() => Child;
 
 
-    public void SetName(string name) => ClassName = name;
+    private string ClearName(string name)
+    {
+        char[] chars = {'\\', '}', ']', '{', '}', '"', ':'};
+        return name.Trim(chars);
+    }
 
+    public void SetName(string name) => ClassName = name;
 
     public string? GetName() => ClassName;
 
@@ -74,6 +79,7 @@ public class TsClass
     // returns true if Children already contains child.
     public bool IsChildPresent(string className)
     {
+        className = ClearName(className);
         if (Children != null && Children.Count > 0) 
         {
             foreach(var indice in Children)

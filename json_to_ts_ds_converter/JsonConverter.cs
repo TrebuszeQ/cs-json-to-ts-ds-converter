@@ -67,21 +67,21 @@ public class JsonConverter
         {
             if (CurrentObject != null)
             {
-                string typeString;
-                string? value;
-                int closing = 0;
-                int opening = 0;
-                string fieldName;
-                bool truth;
-                string dataType;
-                int closingNew;
-                int trimEnd;
-                int trimStart;
-                string newVal;
-
-                value = CurrentObject.GetValue();
+                
+                string? value = CurrentObject.GetValue();
                 while (value != null && value.Length > 0)
                 {
+                    string typeString;
+                    int closing = 0;
+                    int opening = 0;
+                    string fieldName;
+                    bool truth;
+                    string dataType;
+                    int closingNew;
+                    int trimEnd;
+                    int trimStart;
+                    string newVal;
+
                     // fieldName
                     closing = value.IndexOf(":");
                     if (closing <= 0) 
@@ -90,10 +90,8 @@ public class JsonConverter
                         CurrentObject.SetValue(value);
                         break;
                     }
-
                     
-                    // string fieldName = value[..closing];
-                    string ExtractFieldName()
+                    string TrimBothEnds()
                     {
                         string fieldName = value[..closing];
                         int length = fieldName.Length;
@@ -119,7 +117,7 @@ public class JsonConverter
                         return fieldNameCleared.ToString();
                     }
 
-                    fieldName = ExtractFieldName();
+                    fieldName = TrimBothEnds();
 
                     // break on null fieldName
                     if (fieldName == null) 
@@ -144,17 +142,14 @@ public class JsonConverter
                     //trim parent
                     CurrentObject.SetValue(value);
                     
-                    
-
                     //value
                     closing = value.IndexOf(",");
                     if (closing <= 0) closing = value.Length;
-                    
                     typeString = value.Substring(0, Math.Abs(closing));
                     
                     int findIndex(char desired)
                     {
-                        for(int x = opening; x < value.Length - 1; x++)
+                        for(int x = 0; x < value.Length - 1; x++)
                         {
                             if(desired.Equals(value[x])) return x;
                         }
@@ -228,7 +223,7 @@ public class JsonConverter
                         }
                         return dataType;
                     }
-
+                    // typeString = TrimBothEnds();
                     dataType = ReturnDataType();
 
                     if (closingNew == -2) closingNew = findIndex(',');
